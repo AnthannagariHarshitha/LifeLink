@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Wallet, TrendingUp, TrendingDown, DollarSign, CreditCard, Trash2, PieChart } from 'lucide-react';
+import { Plus, Wallet, TrendingUp, TrendingDown, DollarSign, CreditCard, Trash2, PieChart, Edit2 } from 'lucide-react';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -27,6 +27,8 @@ export const FinancePage = () => {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [showAddTransaction, setShowAddTransaction] = useState(false);
   const [showAddBudget, setShowAddBudget] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
+  const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
   const [transactionForm, setTransactionForm] = useState({
     amount: 0,
     category: 'food',
@@ -77,40 +79,96 @@ export const FinancePage = () => {
 
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase.from('transactions').insert({
-      ...transactionForm,
-      user_id: user?.id,
-    });
+    if (editingTransactionId) {
+      const { error } = await supabase
+        .from('transactions')
+        .update(transactionForm)
+        .eq('id', editingTransactionId);
 
-    if (!error) {
-      setShowAddTransaction(false);
-      setTransactionForm({
-        amount: 0,
-        category: 'food',
-        description: '',
-        transaction_type: 'expense',
-        transaction_date: new Date().toISOString().split('T')[0],
+      if (!error) {
+        setEditingTransactionId(null);
+        setShowAddTransaction(false);
+        setTransactionForm({
+          amount: 0,
+          category: 'food',
+          description: '',
+          transaction_type: 'expense',
+          transaction_date: new Date().toISOString().split('T')[0],
+        });
+        loadTransactions();
+        updateBudgetSpending();
+      }
+    } else {
+      const { error } = await supabase.from('transactions').insert({
+        ...transactionForm,
+        user_id: user?.id,
       });
-      loadTransactions();
-      updateBudgetSpending();
+
+      if (!error) {
+        setShowAddTransaction(false);
+        setTransactionForm({
+          amount: 0,
+          category: 'food',
+          description: '',
+          transaction_type: 'expense',
+          transaction_date: new Date().toISOString().split('T')[0],
+        });
+        loadTransactions();
+        updateBudgetSpending();
+      }
     }
   };
 
   const handleAddBudget = async (e: React.FormEvent) => {
     e.preventDefault();
     const currentMonth = new Date().toISOString().slice(0, 7);
-    const { error } = await supabase.from('budgets').insert({
-      ...budgetForm,
-      user_id: user?.id,
-      month: currentMonth,
-      spent_amount: 0,
-    });
+    if (editingBudgetId) {
+      const { error } = await supabase
+        .from('budgets')
+        .update(budgetForm)
+        .eq('id', editingBudgetId);
 
-    if (!error) {
-      setShowAddBudget(false);
-      setBudgetForm({ category: 'food', monthly_limit: 500 });
-      loadBudgets();
+      if (!error) {
+        setEditingBudgetId(null);
+        setShowAddBudget(false);
+        setBudgetForm({ category: 'food', monthly_limit: 500 });
+        loadBudgets();
+      }
+    } else {
+      const { error } = await supabase.from('budgets').insert({
+        ...budgetForm,
+        user_id: user?.id,
+        month: currentMonth,
+        spent_amount: 0,
+      });
+
+      if (!error) {
+        setShowAddBudget(false);
+        setBudgetForm({ category: 'food', monthly_limit: 500 });
+        loadBudgets();
+      }
     }
+  };
+
+  const editTransaction = (transaction: Transaction) => {
+    setEditingTransactionId(transaction.id);
+    setTransactionForm({
+      amount: transaction.amount,
+      category: transaction.category,
+      description: transaction.description || '',
+      transaction_type: transaction.transaction_type,
+      transaction_date: transaction.transaction_date,
+    });
+    setShowAddTransaction(true);
+  };
+
+  const editBudget = (budget: Budget) => {
+    setEditingBudgetId(budget.id);
+    setBudgetForm({
+      category: budget.category,
+      monthly_limit: budget.monthly_limit,
+    });
+    setShowAddBudget(true);
   };
 
   const updateBudgetSpending = async () => {
@@ -213,7 +271,9 @@ export const FinancePage = () => {
 
         {showAddTransaction && (
           <div className="bg-white rounded-2xl p-8 shadow-lg border border-slate-100">
-            <h3 className="text-2xl font-bold text-slate-900 mb-6">Add Transaction</h3>
+            <h3 className="text-2xl font-bold text-slate-900 mb-6">
+              {editingTransactionId ? 'Edit Transaction' : 'Add Transaction'}
+            </h3>
             <form onSubmit={handleAddTransaction} className="space-y-6">
               <div className="grid md:grid-cols-2 gap-6">
                 <div>
@@ -288,11 +348,21 @@ export const FinancePage = () => {
                   type="submit"
                   className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
                 >
-                  Add Transaction
+                  {editingTransactionId ? 'Update Transaction' : 'Add Transaction'}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowAddTransaction(false)}
+                  onClick={() => {
+                    setShowAddTransaction(false);
+                    setEditingTransactionId(null);
+                    setTransactionForm({
+                      amount: 0,
+                      category: 'food',
+                      description: '',
+                      transaction_type: 'expense',
+                      transaction_date: new Date().toISOString().split('T')[0],
+                    });
+                  }}
                   className="px-6 py-3 bg-slate-100 text-slate-700 rounded-lg font-semibold hover:bg-slate-200 transition-all"
                 >
                   Cancel
@@ -304,7 +374,9 @@ export const FinancePage = () => {
 
         {showAddBudget && (
           <div className="bg-white rounded-2xl p-8 shadow-lg border border-slate-100">
-            <h3 className="text-2xl font-bold text-slate-900 mb-6">Add Budget</h3>
+            <h3 className="text-2xl font-bold text-slate-900 mb-6">
+              {editingBudgetId ? 'Edit Budget' : 'Add Budget'}
+            </h3>
             <form onSubmit={handleAddBudget} className="space-y-6">
               <div className="grid md:grid-cols-2 gap-6">
                 <div>
@@ -343,11 +415,15 @@ export const FinancePage = () => {
                   type="submit"
                   className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
                 >
-                  Add Budget
+                  {editingBudgetId ? 'Update Budget' : 'Add Budget'}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowAddBudget(false)}
+                  onClick={() => {
+                    setShowAddBudget(false);
+                    setEditingBudgetId(null);
+                    setBudgetForm({ category: 'food', monthly_limit: 500 });
+                  }}
                   className="px-6 py-3 bg-slate-100 text-slate-700 rounded-lg font-semibold hover:bg-slate-200 transition-all"
                 >
                   Cancel
@@ -375,12 +451,20 @@ export const FinancePage = () => {
                       <div className={`w-12 h-12 bg-gradient-to-br ${getCategoryColor(budget.category)} rounded-xl flex items-center justify-center`}>
                         <PieChart className="w-6 h-6 text-white" />
                       </div>
-                      <button
-                        onClick={() => deleteBudget(budget.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => editBudget(budget)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => deleteBudget(budget.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                     <h3 className="text-xl font-bold text-slate-900 mb-2 capitalize">{budget.category}</h3>
                     <div className="space-y-2">
@@ -460,12 +544,20 @@ export const FinancePage = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button
-                            onClick={() => deleteTransaction(transaction.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => editTransaction(transaction)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteTransaction(transaction.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

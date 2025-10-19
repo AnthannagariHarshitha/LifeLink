@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Book, Clock, Star, Trash2, Edit2 } from 'lucide-react';
+import { Plus, Book, Clock, Star, Trash2, Edit2, Check } from 'lucide-react';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -19,6 +19,7 @@ export const EducationPage = () => {
   const { user } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     course_name: '',
     course_code: '',
@@ -43,28 +44,62 @@ export const EducationPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase.from('study_plans').insert({
-      ...formData,
-      user_id: user?.id,
-    });
+    if (editingCourseId) {
+      const { error } = await supabase
+        .from('study_plans')
+        .update(formData)
+        .eq('id', editingCourseId);
 
-    if (!error) {
-      setShowAddForm(false);
-      setFormData({
-        course_name: '',
-        course_code: '',
-        semester: '',
-        credits: 3,
-        instructor: '',
-        status: 'enrolled',
+      if (!error) {
+        setEditingCourseId(null);
+        setShowAddForm(false);
+        setFormData({
+          course_name: '',
+          course_code: '',
+          semester: '',
+          credits: 3,
+          instructor: '',
+          status: 'enrolled',
+        });
+        loadCourses();
+      }
+    } else {
+      const { error } = await supabase.from('study_plans').insert({
+        ...formData,
+        user_id: user?.id,
       });
-      loadCourses();
+
+      if (!error) {
+        setShowAddForm(false);
+        setFormData({
+          course_name: '',
+          course_code: '',
+          semester: '',
+          credits: 3,
+          instructor: '',
+          status: 'enrolled',
+        });
+        loadCourses();
+      }
     }
   };
 
   const deleteCourse = async (id: string) => {
     await supabase.from('study_plans').delete().eq('id', id);
     loadCourses();
+  };
+
+  const editCourse = (course: Course) => {
+    setEditingCourseId(course.id);
+    setFormData({
+      course_name: course.course_name,
+      course_code: course.course_code || '',
+      semester: course.semester || '',
+      credits: course.credits || 3,
+      instructor: course.instructor || '',
+      status: course.status,
+    });
+    setShowAddForm(true);
   };
 
   const getStatusColor = (status: string) => {
@@ -97,7 +132,9 @@ export const EducationPage = () => {
 
         {showAddForm && (
           <div className="bg-white rounded-2xl p-8 shadow-lg border border-slate-100">
-            <h3 className="text-2xl font-bold text-slate-900 mb-6">Add New Course</h3>
+            <h3 className="text-2xl font-bold text-slate-900 mb-6">
+              {editingCourseId ? 'Edit Course' : 'Add New Course'}
+            </h3>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid md:grid-cols-2 gap-6">
                 <div>
@@ -182,11 +219,22 @@ export const EducationPage = () => {
                   type="submit"
                   className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
                 >
-                  Add Course
+                  {editingCourseId ? 'Update Course' : 'Add Course'}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowAddForm(false)}
+                  onClick={() => {
+                    setShowAddForm(false);
+                    setEditingCourseId(null);
+                    setFormData({
+                      course_name: '',
+                      course_code: '',
+                      semester: '',
+                      credits: 3,
+                      instructor: '',
+                      status: 'enrolled',
+                    });
+                  }}
                   className="px-6 py-3 bg-slate-100 text-slate-700 rounded-lg font-semibold hover:bg-slate-200 transition-all"
                 >
                   Cancel
@@ -221,6 +269,12 @@ export const EducationPage = () => {
                     <Book className="w-6 h-6 text-white" />
                   </div>
                   <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => editCourse(course)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={() => deleteCourse(course.id)}
                       className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"

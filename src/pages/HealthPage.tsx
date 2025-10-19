@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Heart, Target, TrendingUp, Activity, Moon, Droplets, Smile, Trash2 } from 'lucide-react';
+import { Plus, Heart, Target, TrendingUp, Activity, Moon, Droplets, Smile, Trash2, Edit2, Check } from 'lucide-react';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -30,6 +30,8 @@ export const HealthPage = () => {
   const [recentRecord, setRecentRecord] = useState<HealthRecord | null>(null);
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [showAddRecord, setShowAddRecord] = useState(false);
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<number>(0);
   const [goalForm, setGoalForm] = useState({
     title: '',
     goal_type: 'fitness',
@@ -102,6 +104,15 @@ export const HealthPage = () => {
 
   const deleteGoal = async (id: string) => {
     await supabase.from('health_goals').delete().eq('id', id);
+    loadGoals();
+  };
+
+  const updateGoalProgress = async (goalId: string, newValue: number) => {
+    await supabase
+      .from('health_goals')
+      .update({ current_value: newValue })
+      .eq('id', goalId);
+    setEditingGoalId(null);
     loadGoals();
   };
 
@@ -396,28 +407,67 @@ export const HealthPage = () => {
                       <div className={`w-12 h-12 bg-gradient-to-br ${getGoalColor(goal.goal_type)} rounded-xl flex items-center justify-center`}>
                         <Icon className="w-6 h-6 text-white" />
                       </div>
-                      <button
-                        onClick={() => deleteGoal(goal.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => {
+                            setEditingGoalId(goal.id);
+                            setEditValue(goal.current_value);
+                          }}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => deleteGoal(goal.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                     <h3 className="text-xl font-bold text-slate-900 mb-2">{goal.title}</h3>
                     <p className="text-slate-600 text-sm mb-4">{goal.description}</p>
                     <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-600">Progress</span>
-                        <span className="font-semibold text-slate-900">
-                          {goal.current_value} / {goal.target_value}
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-100 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full bg-gradient-to-r ${getGoalColor(goal.goal_type)}`}
-                          style={{ width: `${Math.min(progress, 100)}%` }}
-                        />
-                      </div>
+                      {editingGoalId === goal.id ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              value={editValue}
+                              onChange={(e) => setEditValue(parseFloat(e.target.value))}
+                              className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+                              placeholder="Current value"
+                            />
+                            <button
+                              onClick={() => updateGoalProgress(goal.id, editValue)}
+                              className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setEditingGoalId(null)}
+                              className="px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-600">Progress</span>
+                            <span className="font-semibold text-slate-900">
+                              {goal.current_value} / {goal.target_value}
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-100 rounded-full h-2">
+                            <div
+                              className={`h-2 rounded-full bg-gradient-to-r ${getGoalColor(goal.goal_type)}`}
+                              style={{ width: `${Math.min(progress, 100)}%` }}
+                            />
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 );
